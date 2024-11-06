@@ -29,9 +29,9 @@ const userSchema = new Schema<IUser>(
         },
         history: [
             {
-                movieId: { type: String },
+                movieId: { type: String, required: true },
                 watchedAt: { type: Date, default: Date.now },
-            },
+            }
         ],
     },
     { timestamps: true }

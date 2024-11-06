@@ -1,12 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES6",                          
-    "module": "commonjs",                     
-    "rootDir": "./src",                       
-    "outDir": "./dist",                       
-    "strict": true,                           
-    "esModuleInterop": true,                  
-    "skipLibCheck": true,                     
-    "forceConsistentCasingInFileNames": true  
-  }
+    "target": "ES6",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true, // Enable strict mode
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

@@ -3,22 +3,22 @@
 import { Schema, model, Document } from 'mongoose';
 
 export interface IMovie extends Document {
-    _id: string; // Using TMDb's movie ID
+    tmdbId: number; // TMDB's movie ID
     title: string;
-    genre: string[];
+    genres: string[];
     actors: string[];
     director: string;
     releaseYear: number;
     description: string;
     createdAt: Date;
-    updatedAt: Date;
+    updatedAt?: Date;
 }
 
 const movieSchema = new Schema<IMovie>(
     {
-        _id: { type: String, required: true }, // TMDb's movie ID
+        tmdbId: { type: Number, required: true, unique: true },
         title: { type: String, required: true },
-        genre: { type: [String], default: [] },
+        genres: { type: [String], default: [] },
         actors: { type: [String], default: [] },
         director: { type: String, default: '' },
         releaseYear: { type: Number, default: 0 },
@@ -29,4 +29,3 @@ const movieSchema = new Schema<IMovie>(
 
 const Movie = model<IMovie>('Movie', movieSchema);
 export default Movie;
-

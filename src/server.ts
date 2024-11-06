@@ -3,110 +3,68 @@
 import express, { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import User, { IUser } from './models/User';
-import { MongoClient, ServerApiVersion } from 'mongodb';
-import Movie, { IMovie } from './models/Movies';
-import axios from 'axios';
-import authRoutes from './routes/authRoutes';
-import historyRoutes from './routes/historyRoutes';
-import preferencesRoutes from './routes/preferencesRoutes';
-import suggestionRoutes from './routes/suggestionRoutes';
-import { asyncHandler } from './utils/asyncHandler';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import logger from './utils/logger';
 
+import authRoutes from './routes/authRoutes';
+import movieRoutes from './routes/movieRoutes';
+import userRoutes from './routes/userRoutes';
 
 dotenv.config();
 
 const app = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
-const mongoURI: string = process.env.MONGODB_URI || 'mongodb://localhost:27017/movieDB?tls=false';
-const jwtSecret: string = process.env.JWT_SECRET || 'your_jwt_secret';
-const hfApiKey: string = process.env.HF_API_KEY || 'your_huggingface_api_key';
+const mongoURI: string = process.env.MONGODB_URI || 'mongodb://localhost:27017/langgraph_movie_suggestor';
 
 // Middleware to parse JSON
 app.use(express.json());
 
-// --- Authentication Middleware ---
-interface AuthenticatedRequest extends Request {
-    user?: IUser;
-}
+// Security Middleware
+app.use(helmet());
 
-const authenticate = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const authHeader = req.header('Authorization');
-    if (!authHeader) return res.status(401).json({ message: 'No token provided.' });
-
-    const token = authHeader.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ message: 'Invalid token format.' });
-
-    try {
-        const decoded = jwt.verify(token, jwtSecret) as { id: string };
-        const user = await User.findById(decoded.id);
-        if (!user) throw new Error('User not found.');
-        req.user = user;
-        next();
-    } catch (error) {
-        res.status(401).json({ message: 'Invalid token.' });
-    }
-};
-
-
-// --- Routes ---
-
-app.use('/api/auth', authRoutes);
-app.use('/api/history', historyRoutes);
-app.use('/api/preferences', preferencesRoutes);
-app.use('/api/suggest', suggestionRoutes);
-
-// --- Start Server ---
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+// Rate Limiting
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again after 15 minutes.',
 });
+app.use(apiLimiter);
 
-// --- Error Handling Middleware ---
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/movies', movieRoutes);
+app.use('/api/users', userRoutes);
+
+// Error Handling Middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    console.error('Unhandled Error in server.ts:', err);
+    logger.error('Unhandled Error:', { error: err });
     res.status(500).json({ message: 'An unexpected error occurred.' });
 });
 
+// Handle unhandled promise rejections and uncaught exceptions
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection at:', { promise, reason });
+    // Optional: Exit the process
+    // process.exit(1);
+});
 
-// mongoose
-//     .connect(mongoURI)
-//     .then(() => {
-//         console.log('Connected to MongoDB.');
-//         app.listen(PORT, () => {
-//             console.log(`Server is running on http://localhost:${PORT}`);
-//         });
-//     })
-//     .catch((err) => {
-//         console.error('MongoDB connection error:', err);
-//         process.exit(1);
-//     });
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception thrown:', { error });
+    // Optional: Exit the process
+    // process.exit(1);
+});
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(mongoURI,
-    {
-        serverApi: {
-            version: ServerApiVersion.v1,
-            strict: true,
-            deprecationErrors: true,
-        },
-        // tls: true, // Enforce TLS
-        tlsInsecure: true,
-    }
-);
-
-
-async function run() {
-    try {
-        // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
-        // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    } finally {
-        // Ensures that the client will close when you finish/error
-        await client.close();
-    }
-}
-run().catch(console.dir);
+// Connect to MongoDB and start server
+mongoose
+    .connect(mongoURI, { ssl: false }) // Set to true if connecting to remote MongoDB with SSL
+    .then(() => {
+        logger.info('Connected to MongoDB.');
+        app.listen(PORT, () => {
+            logger.info(`Server is running on http://localhost:${PORT}`);
+        });
+    })
+    .catch((err) => {
+        logger.error('MongoDB connection error:', { error: err });
+        process.exit(1);
+    });
